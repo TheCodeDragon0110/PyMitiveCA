@@ -54,7 +54,7 @@ Z tego powodu ZABRONIONE JEST korzystanie z umieszczonego w repozytorium pliku s
 
 ## Testy automatyczne
 
-Do komponentu dołączone są testy automatyczne. Najlepiej je wykonać tuż po instalacji komponentu.
+Do komponentu dołączone są testy automatyczne. Najlepiej je wykonać tuż po instalacji komponentu. Należy je uruchamiać wewnątrz katalogu z plikiem requirements.txt.
 Uruchamia się je komendą:
 
 ```bash
