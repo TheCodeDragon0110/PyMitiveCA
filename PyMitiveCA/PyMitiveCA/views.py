@@ -4,6 +4,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from django.http import HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
+from django.utils import timezone
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from .ca import load_ca
@@ -74,8 +75,8 @@ def generate_cert(request):
         .issuer_name(ca_cert_obj.subject)
         .public_key(csr.public_key())
         .serial_number(serial_number)
-        .not_valid_before(datetime.datetime.now())
-        .not_valid_after(datetime.datetime.now() + datetime.timedelta(days=valid_days))
+        .not_valid_before(datetime.datetime.now(datetime.UTC))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=valid_days))
         .add_extension(
             x509.BasicConstraints(ca=False, path_length=None),
             critical=True
@@ -114,8 +115,8 @@ def generate_cert(request):
         key_size=2048,
         signature_algorithm="RSA",
         status=CertRequest.STATUS_APPROVED,
-        processed_at=datetime.datetime.now(),
-        created_at=datetime.datetime.now(),
+        processed_at=timezone.now(),
+        created_at=timezone.now(),
     )
 
     cert_pem = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
@@ -155,8 +156,8 @@ def generate_cert(request):
         serial_number=str(cert.serial_number),
         subject_dn=subject_dn,
         issuer_dn=issuer_dn,
-        not_before=cert.not_valid_before,
-        not_after=cert.not_valid_after,
+        not_before=cert.not_valid_before_utc,
+        not_after=cert.not_valid_after_utc,
         public_key_algorithm=public_key_algorithm,
         signature_algorithm=signature_algorithm,
         key_size=key_size,
@@ -167,7 +168,7 @@ def generate_cert(request):
         key_usage=key_usage,
         extended_key_usage=extended_key_usage,
         revoked=False,
-        created_at=datetime.datetime.now()
+        created_at=timezone.now()
     )
 
     response = HttpResponse(cert_pem, content_type="application/x-pem-file")
@@ -244,8 +245,8 @@ def generate_csr(request):
         key_size=2048,
         signature_algorithm="RSA",
         status=CertRequest.STATUS_PENDING,
-        processed_at=datetime.datetime.now(),
-        created_at=datetime.datetime.now(),
+        processed_at=timezone.now(),
+        created_at=timezone.now(),
     )
 
     response = HttpResponse(csr_pem, content_type="application/x-pem-file")
@@ -365,8 +366,8 @@ def issue_cert(request):
         serial_number=str(cert.serial_number),
         subject_dn=subject_dn,
         issuer_dn=issuer_dn,
-        not_before=cert.not_valid_before,
-        not_after=cert.not_valid_after,
+        not_before=cert.not_valid_before_utc,
+        not_after=cert.not_valid_after_utc,
         public_key_algorithm=public_key_algorithm,
         signature_algorithm=signature_algorithm,
         key_size=key_size,
@@ -377,7 +378,7 @@ def issue_cert(request):
         key_usage=key_usage,
         extended_key_usage=extended_key_usage,
         revoked=False,
-        created_at=datetime.datetime.now()
+        created_at=timezone.now()
     )
 
     fingerprint = hashes.Hash(hashes.SHA256())
@@ -401,8 +402,8 @@ def issue_cert(request):
         key_size=2048,
         signature_algorithm="RSA",
         status=CertRequest.STATUS_PENDING,
-        processed_at=datetime.datetime.now(),
-        created_at=datetime.datetime.now(),
+        processed_at=timezone.now(),
+        created_at=timezone.now(),
     )
 
     response = HttpResponse(cert_pem, content_type="application/x-pem-file")

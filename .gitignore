@@ -1,0 +1,4 @@
+# Certyfikaty i klucze TLS (nginx / certbot) — nigdy nie commitować.
+deploy/nginx/certs/
+deploy/certbot/conf/
+deploy/certbot/www/

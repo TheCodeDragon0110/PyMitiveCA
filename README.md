@@ -75,6 +75,13 @@ Trzeba jednak pamiętać o pozostawieniu serwera włączonym.
 
 Wszelkie szczegóły dokumentacyjno-implementacyjne znajdują się w plikach z kodem.
 
+## Uruchomienie z HTTPS (nginx + certbot)
+
+Do komponentu dołączona jest gotowa konfiguracja nginx jako reverse proxy z
+terminacją TLS przed aplikacją (uruchamianą przez Daphne, serwer ASGI z
+obsługą WebSocket) oraz opcjonalna integracja z certbotem. Szczegóły i
+instrukcja uruchomienia znajdują się w [deploy/README.md](deploy/README.md).
+
 ## Dalszy rozwój aplikacji
 
 * **Uruchomienie protokołu WebSocket** - Został on wpisany do aplikacji jednak zwracany jest błąd HTTP 404 przy próbie podłączenia do niego.
