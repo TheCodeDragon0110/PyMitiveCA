@@ -1,0 +1,9 @@
+# Zależności tylko dla benchmark.py - nie są potrzebne do uruchomienia ani
+# przetestowania samej aplikacji, więc celowo nie są częścią głównego
+# requirements.txt.
+#
+# Instalacja:
+#   pip install -r PyMitiveCA/Benchmarks/requirements-benchmark.txt
+pandas==3.0.5
+plotnine==0.15.8
+psutil==7.2.2

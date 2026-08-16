@@ -158,6 +158,49 @@ Trzeba jednak pamiętać o pozostawieniu serwera włączonym.
 
 Wszelkie szczegóły dokumentacyjno-implementacyjne znajdują się w plikach z kodem.
 
+## Badanie wydajności
+
+W `PyMitiveCA/Benchmarks/benchmark.py` znajduje się skrypt mierzący czas
+odpowiedzi i zużycie zasobów każdego endpointu, dla wszystkich obsługiwanych
+algorytmów i wybranych parametrów (długość klucza RSA, krzywa ECDSA, okres
+ważności certyfikatu, hash i transport OCSP). Wymaga uruchomionego serwera
+(tak jak `PyMitiveCA/Tests/`) oraz dodatkowych zależności:
+
+```bash
+pip install -r PyMitiveCA/Benchmarks/requirements-benchmark.txt
+python PyMitiveCA/Benchmarks/benchmark.py
+```
+
+Domyślnie każdy scenariusz (endpoint x wariant algorytmu/parametru) jest
+powtarzany 100 razy. Wyniki trafiają do
+`PyMitiveCA/Benchmarks/results/<znacznik czasu>/`:
+
+* `results_raw.csv` - jeden wiersz na pojedynczy pomiar,
+* `results_summary.csv` - jeden wiersz na scenariusz: średnia i odchylenie
+  standardowe czasu odpowiedzi, rozmiaru odpowiedzi oraz (gdy dostępne)
+  zużycia CPU/RAM serwera,
+* `boxplot_latency_<endpoint>.png`, `boxplot_cpu_<endpoint>.png` - boxploty
+  rozkładów per scenariusz (plotnine, składnia ggplot2).
+
+Zużycie CPU/RAM serwera jest mierzone tylko wtedy, gdy benchmark jest
+uruchamiany na tym samym hoście co `manage.py runserver` (np. w
+devcontainerze) - w środowisku produkcyjnym (`docker-compose.prod.yml`),
+gdzie aplikacja żyje w osobnym kontenerze, ta kolumna zostaje pusta, a
+mierzony jest wyłącznie czas odpowiedzi.
+
+**Uwaga na czas trwania**: generacja klucza RSA-8192 zajmuje ok. 15-20s NA
+POWTÓRZENIE, więc pełny przebieg (wszystkie algorytmy x 100 powtórzeń) może
+zająć ponad godzinę - skrypt ostrzega o tym i prosi o potwierdzenie
+(pomijalne przez `--yes`). Zakres można zawęzić:
+
+```bash
+python benchmark.py --repeats 10                        # szybki przebieg próbny
+python benchmark.py --endpoints generate_cert,issue_cert
+python benchmark.py --algorithms RSA-2048,ED25519,ML-KEM-1024
+```
+
+Pełna lista opcji: `python PyMitiveCA/Benchmarks/benchmark.py --help`.
+
 ## Uruchomienie z HTTPS (nginx + certbot)
 
 Do komponentu dołączona jest gotowa konfiguracja nginx jako reverse proxy z

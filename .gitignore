@@ -2,3 +2,7 @@
 deploy/nginx/certs/
 deploy/certbot/conf/
 deploy/certbot/www/
+
+# Wyniki benchmarku (PyMitiveCA/Benchmarks/benchmark.py) — generowane,
+# nieprzeznaczone do commitowania.
+PyMitiveCA/Benchmarks/results/
