@@ -37,6 +37,13 @@ DEBUG = True
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# Adresy publikowane w wystawianych certyfikatach: punkt OCSP (rozszerzenie
+# Authority Information Access) i punkt dystrybucji CRL. Muszą wskazywać na
+# adres, pod którym klienci realnie widzą ten serwer.
+CA_BASE_URL = os.environ.get('CA_BASE_URL', 'https://localhost').rstrip('/')
+OCSP_URL = os.environ.get('OCSP_URL', f'{CA_BASE_URL}/ocsp/')
+CRL_URL = os.environ.get('CRL_URL', f'{CA_BASE_URL}/get_crl/')
+
 
 # Application definition
 

@@ -22,12 +22,19 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     path('issue_cert/', views.issue_cert, name='issue_cert'),
+    path('confirm_cert/', views.confirm_cert, name='confirm_cert'),
     path('generate_cert/', views.generate_cert, name='generate_cert'),
     path('generate_csr/', views.generate_csr, name='generate_csr'),
 
     path('get_cert/', views.get_cert, name='get_cert'),
     path('get_csr/', views.get_csr, name='get_csr'),
     path('get_crl/', views.get_crl, name='get_crl'),
+    path('cert_info/', views.cert_info, name='cert_info'),
+
+    # OCSP (RFC 6960): POST z żądaniem DER w ciele oraz GET z żądaniem
+    # zakodowanym base64 w ścieżce. Base64 może zawierać "/", stąd <path:>.
+    path('ocsp/', views.ocsp_responder, name='ocsp'),
+    path('ocsp/<path:encoded_request>', views.ocsp_responder, name='ocsp_get'),
 
     path('revoke/', views.revoke_cert, name='revoke'),
 ]

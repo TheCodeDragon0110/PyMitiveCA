@@ -26,6 +26,10 @@ services:
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
       DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,${DOMAIN:-localhost}"
+      # Adres publikowany w wystawianych certyfikatach (rozszerzenia
+      # Authority Information Access i CRL Distribution Points) - musi być
+      # tym, pod którym klienci widzą responder OCSP i CRL.
+      CA_BASE_URL: "https://${DOMAIN:-localhost}"
     depends_on:
       - db
 
@@ -35,6 +39,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "8000:8000"
     volumes:
       - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
       - ./deploy/nginx/certs:/etc/nginx/certs:ro

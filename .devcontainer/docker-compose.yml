@@ -1,5 +1,3 @@
-version: '3.14'
-
 services:
   app:
     build:
@@ -37,6 +35,21 @@ services:
 
     # Add "forwardPorts": [5432] to **devcontainer.json** to forward PostgreSQL locally.
     # (Adding the "ports" property to this file will not forward from a Codespace.)
+
+  nginx:
+    image: nginx:stable
+    restart: unless-stopped
+    volumes:
+      - ../deploy/nginx/certs:/etc/nginx/certs:ro
+      - ./nginx.conf:/etc/nginx/conf.d/pymitiveca.conf:ro
+
+    # Ten sam namespace sieciowy co "app" i "db" - dzięki temu proxuje do
+    # aplikacji pod localhost:8001 (patrz nginx.conf) bez dodatkowej
+    # konfiguracji sieci. Wymaga wygenerowanych certów w deploy/nginx/certs/
+    # (patrz deploy/README.md) - bez nich kontener nginx nie wystartuje.
+    network_mode: service:db
+
+    # Porty 80/443/8000 forwardowane przez "forwardPorts" w devcontainer.json.
 
 volumes:
   postgres-data:

@@ -61,9 +61,42 @@ class Cert(models.Model):
     :ivar revoked: Informacja o unieważnieniu certyfikatu
     :type revoked: bool
 
+    :ivar revoked_at: Data unieważnienia certyfikatu (None, jeżeli ważny)
+    :type revoked_at: datetime.datetime | None
+
+    :ivar revocation_reason: Powód unieważnienia (None, jeżeli ważny)
+    :type revocation_reason: str | None
+
     :ivar created_at: Data utworzenia wpisu w bazie danych
     :type created_at: datetime.datetime
     """
+
+    # Powody unieważnienia z RFC 5280 (CRLReason) / RFC 6960 (revocationReason)
+    # - wartości i nazwy pól odpowiadają x509.ReasonFlags, żeby mapowanie do
+    # rozszerzeń CRL/OCSP było bezpośrednie. removeFromCRL jest pominięty -
+    # ma sens wyłącznie w delta CRL jako cofnięcie certificate_hold, a ten
+    # system nie wspiera cofania unieważnień.
+    REASON_UNSPECIFIED = "unspecified"
+    REASON_KEY_COMPROMISE = "key_compromise"
+    REASON_CA_COMPROMISE = "ca_compromise"
+    REASON_AFFILIATION_CHANGED = "affiliation_changed"
+    REASON_SUPERSEDED = "superseded"
+    REASON_CESSATION_OF_OPERATION = "cessation_of_operation"
+    REASON_CERTIFICATE_HOLD = "certificate_hold"
+    REASON_PRIVILEGE_WITHDRAWN = "privilege_withdrawn"
+    REASON_AA_COMPROMISE = "aa_compromise"
+
+    REASON_CHOICES = [
+        (REASON_UNSPECIFIED, "Nieokreślony"),
+        (REASON_KEY_COMPROMISE, "Kompromitacja klucza podmiotu"),
+        (REASON_CA_COMPROMISE, "Kompromitacja klucza CA"),
+        (REASON_AFFILIATION_CHANGED, "Zmiana powiązania podmiotu"),
+        (REASON_SUPERSEDED, "Zastąpiony nowym certyfikatem"),
+        (REASON_CESSATION_OF_OPERATION, "Zaprzestanie działalności"),
+        (REASON_CERTIFICATE_HOLD, "Tymczasowe zawieszenie"),
+        (REASON_PRIVILEGE_WITHDRAWN, "Cofnięcie uprawnień"),
+        (REASON_AA_COMPROMISE, "Kompromitacja Attribute Authority"),
+    ]
 
     serial_number = models.CharField(
         max_length=128,
@@ -105,7 +138,9 @@ class Cert(models.Model):
     )
 
     key_size = models.IntegerField(
-        help_text="Długość klucza w bitach."
+        null=True,
+        blank=True,
+        help_text="Długość klucza: liczba bitów dla RSA (moduł), ECDSA (rząd krzywej) i ED25519 (255), albo numer wariantu dla ML-KEM (768/1024)."
     )
 
     encrypted_private_key = models.TextField(
@@ -134,7 +169,8 @@ class Cert(models.Model):
     )
 
     pem_data = models.TextField(
-        help_text="Certyfikat zapisany w formacie PEM."
+        blank=True,
+        help_text="Certyfikat zapisany w formacie PEM. Puste, dopóki pop_pending=True."
     )
 
     revoked = models.BooleanField(
@@ -143,15 +179,87 @@ class Cert(models.Model):
         help_text="Określa, czy certyfikat został unieważniony."
     )
 
+    revoked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Data i czas unieważnienia certyfikatu. Wymagana przez OCSP "
+                  "(revocationTime, RFC 6960) i przez wpisy w CRL - puste, "
+                  "dopóki certyfikat nie został unieważniony."
+    )
+
+    revocation_reason = models.CharField(
+        max_length=30,
+        choices=REASON_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Powód unieważnienia (RFC 5280 CRLReason) - puste, dopóki "
+                  "certyfikat nie został unieważniony."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def Revoke(self):
+    pop_pending = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Certyfikat wystawiony dla klucza KEM (np. ML-KEM) oczekuje na "
+                   "potwierdzenie posiadania klucza (POP) - pem_data jest puste, "
+                   "dopóki żądający nie odszyfruje pop_encrypted_cert i nie "
+                   "potwierdzi tego przez confirm_cert/."
+    )
+
+    pop_kem_ciphertext_b64 = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Szyfrogram KEM (base64) potrzebny do odtworzenia sekretu przy potwierdzeniu POP."
+    )
+
+    pop_nonce_b64 = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Nonce AES-GCM (base64) użyty do zaszyfrowania certyfikatu."
+    )
+
+    pop_encrypted_cert_b64 = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Certyfikat PEM zaszyfrowany AES-256-GCM (base64), do czasu potwierdzenia POP."
+    )
+
+    def Revoke(self, reason: str = REASON_UNSPECIFIED):
         """
         Metoda do odwołania certyfikatu.
+
+        Zapisuje też moment i powód unieważnienia - CRL i OCSP muszą podawać
+        revocationTime, a ponowne wywołanie nie przesuwa daty ani nie
+        zmienia już zapisanego powodu (pierwsze unieważnienie jest
+        rozstrzygające - system nie wspiera cofania unieważnień).
+
+        :param reason: powód unieważnienia (patrz REASON_CHOICES)
+        :raises ValueError: gdy `reason` nie jest jednym z REASON_CHOICES
         :return:
         """
+        if reason not in dict(self.REASON_CHOICES):
+            raise ValueError(
+                f"Nieznany powód unieważnienia: {reason!r}. "
+                f"Dozwolone: {[value for value, _label in self.REASON_CHOICES]}"
+            )
+
         self.revoked = True
-        self.save(update_fields=["revoked"])
+        if self.revoked_at is None:
+            self.revoked_at = timezone.now()
+            self.revocation_reason = reason
+        self.save(update_fields=["revoked", "revoked_at", "revocation_reason"])
+
+    def revocation_reason_flag(self) -> x509.ReasonFlags:
+        """
+        Zwraca powód unieważnienia jako x509.ReasonFlags (do rozszerzeń
+        CRLReason/OCSP revocationReason) - unspecified dla wpisów sprzed
+        dodania tego pola, gdzie revocation_reason jest puste.
+
+        :return: powód unieważnienia
+        :rtype: cryptography.x509.ReasonFlags
+        """
+        return x509.ReasonFlags[self.revocation_reason or self.REASON_UNSPECIFIED]
 
     def is_valid(self) -> bool:
         """
@@ -261,7 +369,9 @@ class CertRequest(models.Model):
     )
 
     key_size = models.IntegerField(
-        help_text="Długość klucza publicznego w bitach."
+        null=True,
+        blank=True,
+        help_text="Długość klucza publicznego: liczba bitów dla RSA (moduł), ECDSA (rząd krzywej) i ED25519 (255), albo numer wariantu dla ML-KEM (768/1024)."
     )
 
     signature_algorithm = models.CharField(
@@ -413,7 +523,13 @@ class Crl(models.Model):
         now = timezone.now()
 
         crl = cls.objects.filter(issuer_dn=issuer_dn, next_update__gt=now).order_by('-this_update').first()
-        if crl:
+        # Istniejący CRL nadaje się do ponownego użycia tylko wtedy, gdy od
+        # jego wygenerowania nic nie zostało unieważnione - inaczej przez cały
+        # okres ważności listy CRL twierdziłby, że certyfikat jest ważny,
+        # podczas gdy OCSP raportowałby go już jako unieważniony.
+        if crl and not Cert.objects.filter(
+            revoked=True, issuer_dn=issuer_dn, revoked_at__gt=crl.this_update
+        ).exists():
             return crl
 
         new_crl = cls(
@@ -430,10 +546,14 @@ class Crl(models.Model):
             .next_update(new_crl.next_update)
 
         for cert in revoked_certs:
+            # serial_number jest zapisywany dziesiętnie (str(cert.serial_number)
+            # przy wystawianiu), więc parsujemy go dziesiętnie - inaczej wpisy w
+            # CRL dotyczyłyby innych numerów niż odpowiedzi OCSP.
             revoked_cert = x509.RevokedCertificateBuilder() \
                 .serial_number(
-                int(cert.serial_number, 16) if isinstance(cert.serial_number, str) else cert.serial_number) \
-                .revocation_date(new_crl.this_update) \
+                int(cert.serial_number) if isinstance(cert.serial_number, str) else cert.serial_number) \
+                .revocation_date(cert.revoked_at or new_crl.this_update) \
+                .add_extension(x509.CRLReason(cert.revocation_reason_flag()), critical=False) \
                 .build()
             crl_builder = crl_builder.add_revoked_certificate(revoked_cert)
 

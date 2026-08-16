@@ -56,6 +56,13 @@ Aplikacja będzie dostępna pod `https://localhost/`. Endpointy WebSocket
 (`/ws/...`) i pozostałe (`/issue_cert/`, `/get_cert/` itd.) są proxowane
 przez nginx do Daphne pod `app:8001`.
 
+Port `8000` (historycznie bezpośredni dostęp do serwera deweloperskiego
+Django, patrz `forwardPorts` w `.devcontainer/devcontainer.json`) **nie
+serwuje już aplikacji bezpośrednio** — nginx nasłuchuje na nim tylko po
+to, żeby przekierować (`301`) na `https://localhost/`, tak samo jak na
+porcie `80`. Sama aplikacja (Daphne/`manage.py runserver`) nie powinna
+być wystawiona na zewnątrz — tylko nginx.
+
 ## Przejście na certbot (gdy pojawi się realna domena)
 
 Gdy komponent będzie wdrażany na serwerze z publicznym adresem IP i domeną
@@ -95,3 +102,28 @@ certyfikat Let's Encrypt:
   przy realnej domenie dopisz ją do tej listy.
 * Plik `secrets.json` (klucze CA) i tak nie powinien być używany w
   produkcji — patrz ostrzeżenie w głównym `README.md`.
+* **Adresy OCSP i CRL** wpisywane do wystawianych certyfikatów pochodzą ze
+  zmiennych `CA_BASE_URL` (albo dokładniejszych `OCSP_URL` i `CRL_URL`) —
+  `docker-compose.prod.yml` ustawia je z `${DOMAIN}`. Adres trafia do
+  certyfikatu **w chwili wystawienia**, więc jego późniejsza zmiana nie
+  poprawi certyfikatów już wydanych.
+* Konfiguracja nginx ma `merge_slashes off`, bo transport GET protokołu
+  OCSP niesie żądanie zakodowane base64 w ścieżce, a base64 może zawierać
+  `//`. Po zmianie konfiguracji trzeba przeładować nginx
+  (`docker compose -f docker-compose.prod.yml restart nginx`).
+* **Testy automatyczne** (`PyMitiveCA/Tests/`) łączą się z aplikacją przez
+  `https://localhost/`, więc do ich uruchomienia potrzebny jest działający
+  nginx z certyfikatem (patrz wyżej) oraz aplikacja nasłuchująca tam, gdzie
+  wskazuje `upstream` w `pymitiveca.conf`. `PyMitiveCA/Tests/conftest.py`
+  automatycznie ufa certyfikatowi z `deploy/nginx/certs/rootCA.pem` — jeśli
+  go tam nie ma (bo użyto `generate-self-signed.sh` zamiast
+  `generate-ca-chain.sh`, albo certyfikaty w ogóle nie zostały wygenerowane),
+  testy zostaną pominięte (`skip`) z odpowiednim komunikatem.
+* **Uruchomienie testów w devcontainerze**: `.devcontainer/docker-compose.yml`
+  ma własną usługę `nginx` (konfiguracja w `.devcontainer/nginx.conf`,
+  osobna od `deploy/nginx/conf.d/pymitiveca.conf`, bo w devcontainerze
+  aplikacja jest widoczna pod `localhost:8001`, a nie `app:8001` jak w
+  `docker-compose.prod.yml`) — więc wystarczy wygenerować certyfikaty
+  (`./deploy/nginx/generate-ca-chain.sh`) **przed** przebudową/startem
+  devcontainera i odpalić `pytest` w środku, bez ręcznego stawiania
+  `docker-compose.prod.yml`.

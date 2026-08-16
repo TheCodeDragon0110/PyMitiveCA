@@ -11,10 +11,18 @@
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// This can be used to network with other containers or the host.
-	"forwardPorts": [8000, 5432, 80, 443],
+	// nginx (usługa "nginx" w docker-compose.yml) obsługuje 80/443/8000
+	// (8000 to tylko redirect na HTTPS, tak jak w prod) i proxuje do
+	// aplikacji. Port 8001 (runserver) celowo NIE jest forwardowany -
+	// wejście do aplikacji idzie wyłącznie przez nginx.
+	"forwardPorts": [5432, 80, 443, 8000],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": "pip install --user -r requirements.txt",
+
+	// Use 'postStartCommand' to run commands each time the container starts.
+	// Skrypt czeka na bazę, robi migrate i startuje runserver na 8001 w tle.
+	"postStartCommand": "bash .devcontainer/start-app.sh"
 
 	// Configure tool-specific properties.
 	// "customizations": {},
